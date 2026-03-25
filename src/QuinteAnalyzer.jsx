@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 
-const PMU = "/api/pmu/rest/client/1";
+const PMU = import.meta.env.DEV
+  ? "/api/pmu/rest/client/1"
+  : "https://online.turfinfo.api.pmu.fr/rest/client/1";
 
 function fmtDate(d) {
   return `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
@@ -165,8 +167,8 @@ export default function QuinteAnalyzer() {
                 if (!pRes.ok) continue;
                 const pData = await pRes.json();
                 for (const p of (pData.participants || [])) {
-                  const jName = p.jockey?.nom || "?";
-                  const tName = p.entraineur?.nom || "?";
+                  const jName = p.driver || p.jockey?.nom || (typeof p.jockey === "string" ? p.jockey : "?");
+                  const tName = (typeof p.entraineur === "string" ? p.entraineur : p.entraineur?.nom) || "?";
                   if (!stats[jName]) stats[jName] = { type: "jockey", runs: 0, top3: 0, top5: 0, wins: 0 };
                   stats[jName].runs++;
                   if (p.ordreArrivee === 1) { stats[jName].wins++; stats[jName].top3++; stats[jName].top5++; }
@@ -223,7 +225,7 @@ export default function QuinteAnalyzer() {
         const pronoScore = pronoMap[p.numPmu] || 0;
         score += pronoScore * 2;
 
-        const jName = p.jockey?.nom || "";
+        const jName = p.driver || p.jockey?.nom || (typeof p.jockey === "string" ? p.jockey : "") || "";
         const jStats = historyData[jName];
         if (jStats && jStats.runs >= 3) {
           const jWinRate = jStats.wins / jStats.runs;
@@ -231,7 +233,7 @@ export default function QuinteAnalyzer() {
           score += jWinRate * 30 + jTopRate * 15;
         }
 
-        const tName = p.entraineur?.nom || "";
+        const tName = (typeof p.entraineur === "string" ? p.entraineur : p.entraineur?.nom) || "";
         const tStats = historyData[`T_${tName}`];
         if (tStats && tStats.runs >= 3) {
           const tWinRate = tStats.wins / tStats.runs;
@@ -239,7 +241,7 @@ export default function QuinteAnalyzer() {
           score += tWinRate * 20 + tTopRate * 10;
         }
 
-        if (p.oeilleres) score += 2;
+        if (p.oeilleres && p.oeilleres !== "SANS_OEILLERES") score += 2;
         if (p.deferre === "DEFERRE_ANTERIEURS" || p.deferre === "DEFERRE_POSTERIEURS") score += 1.5;
         if (p.deferre === "DEFERRE_4") score += 3;
 
@@ -252,14 +254,19 @@ export default function QuinteAnalyzer() {
       .sort((a, b) => b.score - a.score);
   }, [participants, pronostics, historyData]);
 
+  const getJockey = (p) => p.driver || p.jockey?.nom || (typeof p.jockey === "string" ? p.jockey : null) || "?";
+  const getEntraineur = (p) => (typeof p.entraineur === "string" ? p.entraineur : p.entraineur?.nom) || "?";
+  const getProprietaire = (p) => (typeof p.proprietaire === "string" ? p.proprietaire : p.proprietaire?.nom) || "?";
+  const getEleveur = (p) => (typeof p.eleveur === "string" ? p.eleveur : p.eleveur?.nom) || null;
+  const hasOeilleres = (p) => p.oeilleres && p.oeilleres !== "SANS_OEILLERES";
   const getSexLabel = (s) => ({ MALES: "♂ Mâle", FEMELLES: "♀ Femelle", HONGRES: "⚊ Hongre" }[s] || s || "?");
-  const getOeilleres = (o) => o ? "✓ Oui" : "✗ Non";
+  const getOeilleres = (o) => o && o !== "SANS_OEILLERES" ? "✓ Oui" : "✗ Non";
   const getDeferre = (d) => {
     if (!d || d === "FERRE") return "Ferré 4 pieds";
     if (d === "DEFERRE_ANTERIEURS") return "Déferré antérieurs";
     if (d === "DEFERRE_POSTERIEURS") return "Déferré postérieurs";
     if (d === "DEFERRE_4") return "Déferré 4 pieds";
-    return d;
+    return d.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase());
   };
 
   return (
@@ -446,12 +453,16 @@ export default function QuinteAnalyzer() {
                   display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 14px",
                   fontSize: 12, color: "#999", marginBottom: 8
                 }}>
-                  <div><span style={{ color: "#666" }}>Jockey:</span> {p.jockey?.nom || "?"}</div>
-                  <div><span style={{ color: "#666" }}>Entraîneur:</span> {p.entraineur?.nom || "?"}</div>
-                  <div><span style={{ color: "#666" }}>Propriétaire:</span> {p.proprietaire?.nom || "?"}</div>
+                  <div><span style={{ color: "#666" }}>Jockey/Driver:</span> {getJockey(p)}</div>
+                  <div><span style={{ color: "#666" }}>Entraîneur:</span> {getEntraineur(p)}</div>
+                  <div><span style={{ color: "#666" }}>Propriétaire:</span> {getProprietaire(p)}</div>
                   <div><span style={{ color: "#666" }}>Poids:</span> {p.poidsConditionMonte || p.handicapPoids || "?"}kg</div>
-                  <div><span style={{ color: "#666" }}>Œillères:</span> <span style={{ color: p.oeilleres ? "#5BBA6F" : "#888" }}>{getOeilleres(p.oeilleres)}</span></div>
+                  <div><span style={{ color: "#666" }}>Œillères:</span> <span style={{ color: hasOeilleres(p) ? "#5BBA6F" : "#888" }}>{getOeilleres(p.oeilleres)}</span></div>
                   <div><span style={{ color: "#666" }}>Ferrure:</span> {getDeferre(p.deferre)}</div>
+                  {getEleveur(p) && <div><span style={{ color: "#666" }}>Éleveur:</span> {getEleveur(p)}</div>}
+                  {p.nomPere && <div><span style={{ color: "#666" }}>Père:</span> {p.nomPere}</div>}
+                  {p.nomMere && <div><span style={{ color: "#666" }}>Mère:</span> {p.nomMere}</div>}
+                  {p.nombreCourses != null && <div><span style={{ color: "#666" }}>Courses:</span> {p.nombreCourses} ({p.nombreVictoires}V {p.nombrePlaces}P)</div>}
                 </div>
 
                 {p.musique && (
@@ -535,8 +546,103 @@ export default function QuinteAnalyzer() {
           </div>
         )}
 
-        {!loading && !error && tab === "pronostic" && (
+        {!loading && !error && tab === "pronostic" && (() => {
+          const raceDate = raceInfo?.heureDepart
+            ? new Date(raceInfo.heureDepart)
+            : null;
+          const dateStr = raceDate
+            ? raceDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+            : selectedDate;
+          const timeStr = raceDate
+            ? raceDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+            : null;
+
+          // Generate multiple DISTINCT series of 5 horses
+          const all = scoredParticipants;
+          const series = [];
+          const usedCombos = new Set();
+
+          const comboKey = (horses) => horses.map(h => h.numPmu).sort((a,b) => a-b).join("-");
+
+          const addSeries = (label, desc, horses) => {
+            if (horses.length !== 5) return;
+            const key = comboKey(horses);
+            if (usedCombos.has(key)) return;
+            usedCombos.add(key);
+            series.push({ label, desc, horses });
+          };
+
+          // Sort variants
+          const byScore = [...all];
+          const byMusic = [...all].sort((a, b) => b.mScore - a.mScore);
+          const byProno = [...all].sort((a, b) => b.pronoScore - a.pronoScore);
+
+          // Serie 1: Top 5 score strict — ordre par score global
+          if (all.length >= 5) {
+            addSeries("Série 1 — Favoris", "Top 5 score global dans l'ordre", byScore.slice(0, 5));
+          }
+
+          // Serie 2: Best music order — chevaux avec la meilleure forme récente
+          if (all.length >= 8) {
+            const picked = [];
+            const used = new Set();
+            // Take top 3 music + fill with top score not already in
+            for (const h of byMusic) { if (picked.length < 3 && !used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); } }
+            for (const h of byScore) { if (picked.length < 5 && !used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); } }
+            addSeries("Série 2 — Forme récente", "Meilleure musique + base solide", picked);
+          }
+
+          // Serie 3: Prono PMU + outsider — confiance experts avec surprise
+          if (all.length >= 10) {
+            const picked = [];
+            const used = new Set();
+            for (const h of byProno) { if (picked.length < 3 && !used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); } }
+            // Add 2 outsiders (ranked 7-12 by score)
+            for (const h of byScore.slice(6, 12)) { if (picked.length < 5 && !used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); } }
+            addSeries("Série 3 — Experts + outsiders", "Consensus PMU + 2 surprises", picked);
+          }
+
+          // Serie 4: Pure outsiders — chevaux 5-10 du classement
+          if (all.length >= 10) {
+            addSeries("Série 4 — Outsiders", "Chevaux sous-cotés rang 5-10", byScore.slice(4, 9));
+          }
+
+          // Serie 5: Mix — meilleur de chaque critère sans doublon
+          if (all.length >= 10) {
+            const picked = [];
+            const used = new Set();
+            // #1: best score
+            if (byScore[0]) { picked.push(byScore[0]); used.add(byScore[0].numPmu); }
+            // #2: best music not already picked
+            for (const h of byMusic) { if (!used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); break; } }
+            // #3: best prono not already picked
+            for (const h of byProno) { if (!used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); break; } }
+            // #4: best outsider (rank 8+)
+            for (const h of byScore.slice(7)) { if (!used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); break; } }
+            // #5: second best music not already picked
+            let mCount = 0;
+            for (const h of byMusic) { if (!used.has(h.numPmu)) { mCount++; if (mCount >= 2) { picked.push(h); used.add(h.numPmu); break; } } }
+            addSeries("Série 5 — Combiné optimal", "1 favori + forme + experts + outsider", picked);
+          }
+
+          // Serie 6: Reverse top — favori en 5e, outsiders devant
+          if (all.length >= 8) {
+            const base = byScore.slice(0, 5);
+            addSeries("Série 6 — Ordre inversé", "Même chevaux, arrivée surprise", [base[4], base[3], base[2], base[1], base[0]]);
+          }
+
+          // Serie 7: Deep outsiders + 1 favori
+          if (all.length >= 14) {
+            const picked = [byScore[0]]; // 1 favori
+            const used = new Set([byScore[0].numPmu]);
+            // 4 deep outsiders (rank 9-14)
+            for (const h of byScore.slice(8, 14)) { if (picked.length < 5 && !used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); } }
+            addSeries("Série 7 — Gros rapport", "1 favori + outsiders lointains", picked);
+          }
+
+          return (
           <div>
+            {/* Header with date & time */}
             <div style={{
               background: "linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))",
               border: "1px solid rgba(212,175,55,0.2)", borderRadius: 16,
@@ -545,95 +651,114 @@ export default function QuinteAnalyzer() {
               <p style={{
                 fontSize: 11, color: "#D4AF37", textTransform: "uppercase",
                 letterSpacing: 3, margin: "0 0 10px", fontWeight: 600
-              }}>Sélection du jour</p>
+              }}>Pronostic du jour</p>
               <h2 style={{
-                margin: "0 0 6px", fontFamily: "Playfair Display", fontSize: 20,
+                margin: "0 0 8px", fontFamily: "Playfair Display", fontSize: 20,
                 color: "#F5E6A3"
               }}>
                 {raceInfo?.libelle || "Quinté+"}
               </h2>
-              <p style={{ color: "#888", fontSize: 12, margin: 0 }}>
-                {raceInfo?.hippodrome} • {raceInfo?.distance}m • {participants.filter(p=>!p.nonPartant).length} partants
-              </p>
+              <div style={{
+                display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap",
+                fontSize: 13, color: "#ccc", marginBottom: 6
+              }}>
+                <span>📅 {dateStr}</span>
+                {timeStr && <span>🕐 {timeStr}</span>}
+              </div>
+              <div style={{
+                display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap",
+                fontSize: 12, color: "#888"
+              }}>
+                <span>📍 {raceInfo?.hippodrome}</span>
+                <span>🏇 {raceInfo?.specialite || "Plat"}</span>
+                <span>📏 {raceInfo?.distance}m</span>
+                <span>💰 {raceInfo?.montantPrix ? `${(raceInfo.montantPrix/1000).toFixed(0)}K€` : "?"}</span>
+                <span>👥 {participants.filter(p=>!p.nonPartant).length} partants</span>
+              </div>
             </div>
 
-            {/* Top 5 */}
-            <div style={{ marginBottom: 16 }}>
-              <p style={{
-                fontSize: 11, color: "#D4AF37", textTransform: "uppercase",
-                letterSpacing: 2, margin: "0 0 10px", fontWeight: 600
-              }}>🏆 Top 5 — Base quinté</p>
-              {scoredParticipants.slice(0, 5).map((p, i) => (
-                <div key={p.numPmu} style={{
-                  background: i === 0
-                    ? "linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.04))"
-                    : "rgba(255,255,255,0.03)",
-                  border: `1px solid ${i === 0 ? "rgba(212,175,55,0.25)" : "rgba(255,255,255,0.06)"}`,
-                  borderRadius: 12, padding: 14, marginBottom: 6,
-                  display: "flex", alignItems: "center", gap: 14
+            {/* Multiple series */}
+            {series.map((s, si) => (
+              <div key={si} style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                  <p style={{
+                    fontSize: 12, color: si === 0 ? "#D4AF37" : "#aaa", textTransform: "uppercase",
+                    letterSpacing: 2, margin: 0, fontWeight: 700
+                  }}>{si === 0 ? "🏆 " : "🎯 "}{s.label}</p>
+                  <span style={{ fontSize: 10, color: "#666" }}>{s.desc}</span>
+                </div>
+
+                <div style={{
+                  background: si === 0 ? "rgba(212,175,55,0.04)" : "rgba(255,255,255,0.02)",
+                  border: `1px solid ${si === 0 ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.06)"}`,
+                  borderRadius: 14, padding: 14
                 }}>
+                  {/* Compact order display */}
                   <div style={{
-                    fontSize: 24, fontWeight: 800, fontFamily: "Playfair Display",
-                    color: i === 0 ? "#D4AF37" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#666",
-                    width: 30, textAlign: "center"
-                  }}>{i + 1}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontWeight: 700, fontSize: 15, color: "#e8e6e1" }}>
-                        N°{p.numPmu} — {(p.nom || "").toUpperCase()}
-                      </span>
+                    display: "flex", gap: 6, marginBottom: 12, justifyContent: "center", flexWrap: "wrap"
+                  }}>
+                    {s.horses.map((p, i) => (
+                      <div key={p.numPmu} style={{
+                        background: i === 0 ? "linear-gradient(135deg, #D4AF37, #B8860B)" : "rgba(255,255,255,0.08)",
+                        borderRadius: 10, padding: "6px 14px",
+                        display: "flex", alignItems: "center", gap: 6
+                      }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, color: i === 0 ? "#0a0a0f" : "#888",
+                          fontFamily: "JetBrains Mono"
+                        }}>{i + 1}.</span>
+                        <span style={{
+                          fontSize: 15, fontWeight: 800, color: i === 0 ? "#0a0a0f" : "#D4AF37",
+                          fontFamily: "JetBrains Mono"
+                        }}>{p.numPmu}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Detail rows */}
+                  {s.horses.map((p, i) => (
+                    <div key={p.numPmu} style={{
+                      display: "flex", alignItems: "center", gap: 10, padding: "6px 0",
+                      borderTop: i > 0 ? "1px solid rgba(255,255,255,0.04)" : "none"
+                    }}>
                       <span style={{
-                        fontFamily: "JetBrains Mono", fontWeight: 700, fontSize: 16,
-                        color: "#D4AF37"
+                        width: 22, height: 22, borderRadius: 6, display: "flex",
+                        alignItems: "center", justifyContent: "center", fontSize: 11,
+                        fontWeight: 700, fontFamily: "JetBrains Mono",
+                        background: i === 0 ? "rgba(212,175,55,0.2)" : "rgba(255,255,255,0.05)",
+                        color: i === 0 ? "#D4AF37" : "#888"
+                      }}>{i + 1}</span>
+                      <span style={{ fontWeight: 600, fontSize: 13, color: "#e8e6e1", minWidth: 30 }}>N°{p.numPmu}</span>
+                      <span style={{ fontWeight: 600, fontSize: 13, color: "#ccc", flex: 1 }}>{(p.nom || "").toUpperCase()}</span>
+                      <span style={{ fontSize: 11, color: "#888" }}>{getJockey(p)}</span>
+                      <span style={{
+                        fontFamily: "JetBrains Mono", fontSize: 12, fontWeight: 700,
+                        color: i === 0 ? "#D4AF37" : "#777"
                       }}>{p.score}</span>
                     </div>
-                    <p style={{ margin: "4px 0 0", fontSize: 12, color: "#888" }}>
-                      {p.jockey?.nom || "?"} • {p.entraineur?.nom || "?"} • {getSexLabel(p.sexe)} • {getDeferre(p.deferre)}
-                      {p.oeilleres && " • 👓 Œillères"}
-                    </p>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-
-            {/* Outsiders */}
-            {scoredParticipants.length > 5 && (
-              <div>
-                <p style={{
-                  fontSize: 11, color: "#888", textTransform: "uppercase",
-                  letterSpacing: 2, margin: "0 0 10px", fontWeight: 600
-                }}>💡 Outsiders à surveiller</p>
-                {scoredParticipants.slice(5, 8).map((p, i) => (
-                  <div key={p.numPmu} style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: "1px solid rgba(255,255,255,0.04)",
-                    borderRadius: 10, padding: 10, marginBottom: 4,
-                    display: "flex", alignItems: "center", gap: 10, fontSize: 13
-                  }}>
-                    <span style={{ color: "#666", fontFamily: "JetBrains Mono", fontWeight: 600, width: 24 }}>{i + 6}</span>
-                    <span style={{ color: "#aaa", flex: 1 }}>N°{p.numPmu} {(p.nom || "").toUpperCase()}</span>
-                    <span style={{ color: "#666", fontFamily: "JetBrains Mono" }}>{p.score}</span>
-                  </div>
-                ))}
               </div>
-            )}
+            ))}
 
+            {/* Disclaimer */}
             <div style={{
-              marginTop: 20, padding: 14, background: "rgba(255,255,255,0.02)",
+              marginTop: 10, padding: 14, background: "rgba(255,255,255,0.02)",
               borderRadius: 10, border: "1px solid rgba(255,255,255,0.05)"
             }}>
               <p style={{ margin: 0, fontSize: 11, color: "#666", lineHeight: 1.6 }}>
-                ⚠️ Ce pronostic est généré par algorithme à titre indicatif. Il ne constitue pas un conseil de jeu.
-                Les scores intègrent : musique pondérée, pronostics PMU, stats jockey/entraîneur (si données historiques chargées), équipement et âge.
+                ⚠️ Ces pronostics sont générés par algorithme à titre indicatif. Ils ne constituent pas un conseil de jeu.
+                L'ordre proposé est basé sur le score composite (musique, pronostics PMU, stats jockey/entraîneur, équipement, âge).
                 {Object.keys(historyData).length === 0 && (
                   <span style={{ color: "#D4AF37" }}>
-                    {" "}Pour un pronostic plus précis, chargez les données historiques depuis l'onglet Quinté.
+                    {" "}Pour des pronostics plus précis, chargez les données historiques depuis l'onglet Quinté.
                   </span>
                 )}
               </p>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
