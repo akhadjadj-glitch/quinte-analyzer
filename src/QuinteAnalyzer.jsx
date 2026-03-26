@@ -262,74 +262,91 @@ function generateSeries(synthesized) {
   const byS3 = [...all].sort((a, b) => b.s3n - a.s3n);
   const byS4 = [...all].sort((a, b) => b.s4n - a.s4n);
 
-  // Série 1 — SYNTHÈSE : Top 5 score global (consensus 4 sources)
-  addSeries("Série 1 — Synthèse", "Top 5 — consensus des 4 sources", "🏆",
+  // ═══ BLOC SYNTHÈSES (3 synthèses différentes) ═══
+
+  // Synthèse 1 — ÉQUILIBRÉE : pondération égale des 4 sources
+  addSeries("Synthèse 1 — Équilibrée", "Pondération égale des 4 sources", "🏆",
     byTotal.slice(0, 5));
 
-  // Série 2 — EXPERTS PMU : Top 5 pronostics Equidia/PMU
-  addSeries("Série 2 — Experts PMU", "Pronostics officiels PMU/Equidia", "🏇",
+  // Synthèse 2 — SÉCURITÉ : favorise PMU + Stats (sources fiables)
+  if (all.length >= 5) {
+    const bySafe = [...all].sort((a, b) => (b.s1n * 0.40 + b.s2n * 0.35 + b.s3n * 0.15 + b.s4n * 0.10) - (a.s1n * 0.40 + a.s2n * 0.35 + a.s3n * 0.15 + a.s4n * 0.10));
+    addSeries("Synthèse 2 — Sécurité", "PMU 40% + Stats 35% — chevaux solides", "🛡️",
+      bySafe.slice(0, 5));
+  }
+
+  // Synthèse 3 — OFFENSIVE : favorise Forme + Conditions (terrain du jour)
+  if (all.length >= 5) {
+    const byOff = [...all].sort((a, b) => (b.s3n * 0.40 + b.s4n * 0.30 + b.s1n * 0.15 + b.s2n * 0.15) - (a.s3n * 0.40 + a.s4n * 0.30 + a.s1n * 0.15 + a.s2n * 0.15));
+    addSeries("Synthèse 3 — Offensive", "Forme 40% + Conditions 30% — forme du jour", "⚡",
+      byOff.slice(0, 5));
+  }
+
+  // ═══ BLOC SOURCES INDIVIDUELLES ═══
+
+  // Série 4 — EXPERTS PMU
+  addSeries("Série 4 — Experts PMU", "Pronostics officiels PMU/Equidia", "🏇",
     byS1.slice(0, 5));
 
-  // Série 3 — STATISTIQUE : Meilleurs gains et régularité
-  addSeries("Série 3 — Statistique", "Gains carrière + taux victoire/placé", "📊",
+  // Série 5 — STATISTIQUE
+  addSeries("Série 5 — Statistique", "Gains carrière + taux victoire/placé", "📊",
     byS2.slice(0, 5));
 
-  // Série 4 — FORME : Meilleure musique récente
-  addSeries("Série 4 — Forme récente", "Musique + progression dernières courses", "🎵",
+  // Série 6 — FORME
+  addSeries("Série 6 — Forme récente", "Musique + progression dernières courses", "🎵",
     byS3.slice(0, 5));
 
-  // Série 5 — CONDITIONS : Meilleure adéquation course
-  addSeries("Série 5 — Conditions", "Âge + ferrure + poids + corde + équipement", "⚙️",
+  // Série 7 — CONDITIONS
+  addSeries("Série 7 — Conditions", "Âge + ferrure + poids + corde + équipement", "⚙️",
     byS4.slice(0, 5));
 
-  // Série 6 — CONSENSUS FORT : Chevaux dans le top 5 de 3+ sources
+  // ═══ BLOC STRATÉGIES SPÉCIALES ═══
+
+  // Série 8 — CONSENSUS FORT
   if (all.length >= 8) {
     const highConsensus = all.filter(p => p.consensus >= 3).sort((a, b) => b.total - a.total);
     if (highConsensus.length >= 5) {
-      addSeries("Série 6 — Consensus fort", "Chevaux top 5 dans 3+ sources sur 4", "🎯",
+      addSeries("Série 8 — Consensus fort", "Top dans 3+ sources sur 4", "🎯",
         highConsensus.slice(0, 5));
     } else if (highConsensus.length >= 3) {
-      // Compléter avec les meilleurs du classement général
       const picked = [...highConsensus];
       const used = new Set(picked.map(p => p.numPmu));
       for (const h of byTotal) {
         if (picked.length >= 5) break;
         if (!used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); }
       }
-      addSeries("Série 6 — Consensus fort", `${highConsensus.length} chevaux top dans 3+ sources`, "🎯",
+      addSeries("Série 8 — Consensus fort", `${highConsensus.length} chevaux top dans 3+ sources`, "🎯",
         picked.slice(0, 5));
     }
   }
 
-  // Série 7 — OUTSIDERS MALINS : forme + stats bons mais pas favoris PMU
+  // Série 9 — OUTSIDERS MALINS
   if (all.length >= 10) {
     const outsiders = all
-      .filter(p => p.s1n < 50) // pas favoris PMU
-      .sort((a, b) => (b.s2n + b.s3n) - (a.s2n + a.s3n)); // mais bons en stats + forme
+      .filter(p => p.s1n < 50)
+      .sort((a, b) => (b.s2n + b.s3n) - (a.s2n + a.s3n));
     if (outsiders.length >= 3) {
       const picked = outsiders.slice(0, 3);
       const used = new Set(picked.map(p => p.numPmu));
-      // Ajouter 2 favoris pour sécuriser
       for (const h of byTotal) {
         if (picked.length >= 5) break;
         if (!used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); }
       }
-      addSeries("Série 7 — Outsiders malins", "Bonne forme + stats, pas favoris PMU", "💡",
+      addSeries("Série 9 — Outsiders malins", "Bonne forme + stats, pas favoris PMU", "💡",
         picked.slice(0, 5));
     }
   }
 
-  // Série 8 — GROS RAPPORT : 1 favori + outsiders profonds
+  // Série 10 — GROS RAPPORT
   if (all.length >= 14) {
     const picked = [byTotal[0]];
     const used = new Set([byTotal[0].numPmu]);
-    // 4 chevaux du milieu/fond de classement avec la meilleure forme
     const deepOuts = all.slice(6).sort((a, b) => b.s3n - a.s3n);
     for (const h of deepOuts) {
       if (picked.length >= 5) break;
       if (!used.has(h.numPmu)) { picked.push(h); used.add(h.numPmu); }
     }
-    addSeries("Série 8 — Gros rapport", "1 favori + 4 outsiders en forme", "💰",
+    addSeries("Série 10 — Gros rapport", "1 favori + 4 outsiders en forme", "💰",
       picked.slice(0, 5));
   }
 
