@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 
-const PMU = import.meta.env.DEV
-  ? "/api/pmu/rest/client/1"
-  : "https://online.turfinfo.api.pmu.fr/rest/client/1";
+const PMU_BASE = "https://online.turfinfo.api.pmu.fr/rest/client/1";
+const IS_DEV = import.meta.env.DEV;
+
+function pmuUrl(path) {
+  const url = IS_DEV ? `/api/pmu/rest/client/1${path}` : `${PMU_BASE}${path}`;
+  return IS_DEV ? url : `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+}
 
 function fmtDate(d) {
   return `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
@@ -356,7 +360,7 @@ export default function QuinteAnalyzer() {
     setRaceInfo(null);
     try {
       const dateStr = fmtDate(dateObj);
-      const progRes = await fetch(`${PMU}/programme/${dateStr}`);
+      const progRes = await fetch(pmuUrl(`/programme/${dateStr}`));
       if (!progRes.ok) throw new Error(`Programme indisponible (${progRes.status})`);
       const prog = await progRes.json();
 
@@ -398,13 +402,13 @@ export default function QuinteAnalyzer() {
         pays: reunionData?.pays?.libelle || "France"
       });
 
-      const partRes = await fetch(`${PMU}/programme/${dateStr}/R${reunionNum}/C${quinteRace.numOrdre}/participants`);
+      const partRes = await fetch(pmuUrl(`/programme/${dateStr}/R${reunionNum}/C${quinteRace.numOrdre}/participants`));
       if (!partRes.ok) throw new Error("Participants indisponibles");
       const partData = await partRes.json();
       setParticipants(partData.participants || []);
 
       try {
-        const pronoRes = await fetch(`${PMU}/programme/${dateStr}/R${reunionNum}/C${quinteRace.numOrdre}/pronostics`);
+        const pronoRes = await fetch(pmuUrl(`/programme/${dateStr}/R${reunionNum}/C${quinteRace.numOrdre}/pronostics`));
         if (pronoRes.ok) {
           const pronoData = await pronoRes.json();
           setPronostics(pronoData);
